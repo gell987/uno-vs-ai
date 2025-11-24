@@ -531,7 +531,7 @@ export default function ImprovedUnoGame() {
   const [playerWins, setPlayerWins] = useState(0);
   const [aiWins, setAiWins] = useState(0);
   const [drawPending, setDrawPending] = useState(0);
-  const [difficulty, setDifficulty] = useState("hard");
+  const [difficulty, setDifficulty] = useState("easy");
   const [drewCard, setDrewCard] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -903,7 +903,7 @@ export default function ImprovedUnoGame() {
           return;
         } else if (playerType === "ai" && !unoState.ai) {
           const callChance =
-            difficulty === "easy" ? 0.5 : difficulty === "medium" ? 0.85 : 0.98;
+            difficulty === "easy" ? 0.2 : difficulty === "medium" ? 0.7 : 0.995; // Only 20% in easy!
           if (Math.random() > callChance) {
             setMessage("AI forgot UNO!");
             setTimeout(() => {
@@ -985,7 +985,7 @@ export default function ImprovedUnoGame() {
 
     if (aiHand.length === 2 && !unoState.ai) {
       const callChance =
-        difficulty === "easy" ? 0.6 : difficulty === "medium" ? 0.88 : 0.99;
+        difficulty === "easy" ? 0.25 : difficulty === "medium" ? 0.75 : 0.995; // Only 25% in easy!
       if (Math.random() < callChance) {
         setUnoState((prev) => ({ ...prev, ai: true }));
         setMessage("AI calls UNO!");
@@ -1005,16 +1005,16 @@ export default function ImprovedUnoGame() {
       const draw2Cards = playableCards.filter((c) => c.value === "draw2");
       const wild4Cards = playableCards.filter((c) => c.value === "wild4");
 
-      // Smart stacking decision
+      // Smart stacking decision based on difficulty
       const shouldStack =
-        difficulty === "hard"
+        difficulty === "easy"
           ? (draw2Cards.length > 0 || wild4Cards.length > 0) &&
-            Math.random() > 0.1
+            Math.random() > 0.85 // Only stack 15% of the time!
           : difficulty === "medium"
           ? (draw2Cards.length > 0 || wild4Cards.length > 0) &&
-            Math.random() > 0.3
+            Math.random() > 0.4 // Stack 60% of the time
           : (draw2Cards.length > 0 || wild4Cards.length > 0) &&
-            Math.random() > 0.6;
+            Math.random() > 0.01; // Stack 99% of the time in hard mode!
 
       if (shouldStack) {
         if (draw2Cards.length > 0) {
@@ -1048,7 +1048,7 @@ export default function ImprovedUnoGame() {
       if (drawn.length > 0 && canPlayCard(drawn[0], topCard)) {
         setTimeout(() => {
           const playChance =
-            difficulty === "easy" ? 0.7 : difficulty === "medium" ? 0.88 : 0.97;
+            difficulty === "easy" ? 0.35 : difficulty === "medium" ? 0.8 : 0.98; // Only 35% in easy!
           if (Math.random() < playChance) {
             setMessage("AI plays drawn card");
             setTimeout(() => {
@@ -1068,13 +1068,78 @@ export default function ImprovedUnoGame() {
 
   const selectSmartCard = (playableCards, topCard) => {
     if (difficulty === "easy") {
-      const highCards = playableCards.filter((c) => getCardValue(c) >= 20);
-      if (highCards.length > 0 && Math.random() > 0.4) {
-        return highCards[Math.floor(Math.random() * highCards.length)];
+      // Easy: VERY random, bad decision making
+
+      // 85% chance to just play completely random
+      if (Math.random() < 0.85) {
+        return playableCards[Math.floor(Math.random() * playableCards.length)];
       }
+
+      // 15% chance to show some basic logic
+      const wilds = playableCards.filter(
+        (c) => c.value === "wild" || c.value === "wild4"
+      );
+
+      const normalCards = playableCards.filter(
+        (c) => !["skip", "reverse", "draw2", "wild", "wild4"].includes(c.value)
+      );
+
+      // Prefer saving wilds and action cards if normal cards available
+      if (normalCards.length > 0) {
+        return normalCards[Math.floor(Math.random() * normalCards.length)];
+      }
+
       return playableCards[Math.floor(Math.random() * playableCards.length)];
     }
 
+    if (difficulty === "medium") {
+      // Medium: Some strategy but not perfect
+      const colorCounts = COLORS.reduce((acc, color) => {
+        acc[color] = aiHand.filter((c) => c.color === color).length;
+        return acc;
+      }, {});
+
+      const sortedColors = Object.entries(colorCounts).sort(
+        (a, b) => b[1] - a[1]
+      );
+      const strongestColor = sortedColors[0][0];
+      const weakestColor = sortedColors[sortedColors.length - 1][0];
+
+      const scoreCard = (card) => {
+        let score = Math.random() * 30; // Add randomness
+        const baseValue = getCardValue(card);
+
+        // Basic strategy
+        if (aiHand.length <= 3) {
+          // Try to win
+          if (card.value === "wild" || card.value === "wild4") score += 80;
+          if (["draw2", "skip", "reverse"].includes(card.value)) score += 60;
+        } else if (aiHand.length <= 5) {
+          // Play moderately aggressive
+          if (["draw2", "skip", "reverse"].includes(card.value)) score += 40;
+          if (card.color === strongestColor) score += 30;
+        } else {
+          // Get rid of weak colors
+          if (card.color === weakestColor) score += 50;
+          score += baseValue * 0.5;
+        }
+
+        return score;
+      };
+
+      const scoredCards = playableCards
+        .map((card) => ({
+          card,
+          score: scoreCard(card),
+        }))
+        .sort((a, b) => b.score - a.score);
+
+      // Pick from top 3 with some randomness
+      const topCards = scoredCards.slice(0, Math.min(3, scoredCards.length));
+      return topCards[Math.floor(Math.random() * topCards.length)].card;
+    }
+
+    // HARD MODE: Full advanced AI strategy
     const colorCounts = COLORS.reduce((acc, color) => {
       acc[color] = aiHand.filter((c) => c.color === color).length;
       return acc;
@@ -1116,35 +1181,61 @@ export default function ImprovedUnoGame() {
 
       score += baseValue * 0.6;
 
-      // Endgame strategy
+      // HARD MODE: Enhanced endgame strategy
       if (aiHand.length <= 2) {
-        if (card.value === "wild4") score += 200;
-        if (card.value === "wild") score += 180;
-        if (card.value === "draw2") score += 160;
-        if (card.value === "skip" || card.value === "reverse") score += 140;
-        score += baseValue * 3;
+        if (card.value === "wild4") score += 300; // Massively prioritize
+        if (card.value === "wild") score += 250;
+        if (card.value === "draw2") score += 220;
+        if (card.value === "skip" || card.value === "reverse") score += 200;
+        score += baseValue * 4;
+
+        // HARD MODE BONUS: Hold back wilds if we have a playable card of our strongest color
+        if (
+          difficulty === "hard" &&
+          (card.value === "wild" || card.value === "wild4")
+        ) {
+          const strongColorCards = playableCards.filter(
+            (c) =>
+              c.color === strongestColor &&
+              c.value !== "wild" &&
+              c.value !== "wild4"
+          );
+          if (strongColorCards.length > 0 && aiHand.length > 1) {
+            score -= 150; // Save wilds for the killing blow
+          }
+        }
       } else if (aiHand.length <= 4) {
-        if (card.value === "wild4" || card.value === "wild") score += 140;
-        if (card.value === "draw2") score += 100;
-        if (card.value === "skip" || card.value === "reverse") score += 80;
-        if (card.color === strongestColor) score += 60;
-        score += baseValue * 2;
+        if (card.value === "wild4" || card.value === "wild") score += 180;
+        if (card.value === "draw2") score += 140;
+        if (card.value === "skip" || card.value === "reverse") score += 100;
+        if (card.color === strongestColor) score += 80;
+        score += baseValue * 2.5;
+
+        // HARD MODE: Psychological warfare - save action cards for critical moments
+        if (difficulty === "hard" && playerHand.length <= 3) {
+          if (["draw2", "wild4"].includes(card.value)) {
+            score += 150; // Crush them when they're close to winning
+          }
+        }
       } else if (aiHand.length <= 7) {
         if (card.value === "draw2")
-          score += 80 * aiMemory.current.aggressiveness;
-        if (card.value === "skip" || card.value === "reverse") score += 70;
-        if (playerWeakColors.includes(card.color)) score += 55;
-        score += baseValue * 1.2;
+          score += 100 * aiMemory.current.aggressiveness;
+        if (card.value === "skip" || card.value === "reverse") score += 90;
+        if (playerWeakColors.includes(card.color)) score += 75;
+        score += baseValue * 1.5;
       } else {
-        if (card.color === weakestColor) score += 80;
-        if (card.value === "draw2") score += 60;
-        if (card.value === "skip" || card.value === "reverse") score += 50;
-        score += baseValue;
+        if (card.color === weakestColor) score += 100;
+        if (card.value === "draw2") score += 80;
+        if (card.value === "skip" || card.value === "reverse") score += 70;
+        score += baseValue * 1.2;
       }
 
-      // Exploit player weaknesses
+      // Exploit player weaknesses MORE aggressively in hard mode
       if (playerWeakColors.includes(card.color)) {
-        score += 50 * aiMemory.current.confidenceLevel;
+        score +=
+          difficulty === "hard"
+            ? 80 * aiMemory.current.confidenceLevel
+            : 50 * aiMemory.current.confidenceLevel;
       }
 
       // Break player streaks
@@ -1152,7 +1243,7 @@ export default function ImprovedUnoGame() {
         isPlayerOnStreak &&
         card.color !== recentColors[recentColors.length - 1]
       ) {
-        score += 45;
+        score += difficulty === "hard" ? 70 : 45;
       }
 
       // Adapt to player aggression
@@ -1160,12 +1251,12 @@ export default function ImprovedUnoGame() {
         aiMemory.current.aggressiveness > 0.5 &&
         ["draw2", "skip", "reverse"].includes(card.value)
       ) {
-        score += 65;
+        score += difficulty === "hard" ? 100 : 65;
       }
 
-      // Counter defensive players
+      // Counter defensive players MORE in hard mode
       if (aiMemory.current.aggressiveness < 0.25 && card.value === "wild4") {
-        score += 75;
+        score += difficulty === "hard" ? 120 : 75;
       }
 
       // Wild card strategy
@@ -1176,16 +1267,16 @@ export default function ImprovedUnoGame() {
         const playerFavoriteWildColor = sortedWildColors[0][0];
 
         if (colorCounts[playerFavoriteWildColor] >= 2) {
-          score += 40;
+          score += difficulty === "hard" ? 70 : 40;
         }
 
         // Prefer wilds when player has many cards
         if (playerHand.length > aiHand.length + 2) {
-          score += 50;
+          score += difficulty === "hard" ? 80 : 50;
         }
       }
 
-      // Hold wilds when we have strong colors
+      // Hold wilds strategically
       if (card.value === "wild" || card.value === "wild4") {
         if (
           hasStrongColor &&
@@ -1196,62 +1287,93 @@ export default function ImprovedUnoGame() {
               c.value !== "wild4"
           )
         ) {
-          score -= 60;
+          score -= difficulty === "hard" ? 80 : 60;
         }
         if (aiHand.length > 6 && !isPlayerDesperate) {
-          score -= 35;
+          score -= difficulty === "hard" ? 50 : 35;
         }
       }
 
       // Play strongest color
       if (card.color === strongestColor && hasStrongColor) {
         if (aiHand.length > 5) {
-          score += 45;
+          score += difficulty === "hard" ? 60 : 45;
         } else if (aiHand.length > 2) {
-          score += 25;
+          score += difficulty === "hard" ? 40 : 25;
         }
       }
 
-      // Punish desperate players
+      // Punish desperate players RUTHLESSLY in hard mode
       if (isPlayerDesperate && ["draw2", "wild4"].includes(card.value)) {
-        score += 90;
+        score += difficulty === "hard" ? 150 : 90;
       }
 
       // Desperate AI plays
       if (isAIDesperate) {
         if (card.value === "wild" || card.value === "wild4") {
-          score += 100;
+          score += difficulty === "hard" ? 180 : 100;
         }
         if (["draw2", "skip", "reverse"].includes(card.value)) {
-          score += 70;
+          score += difficulty === "hard" ? 120 : 70;
         }
       }
 
-      // Deck awareness
+      // Deck awareness - more aggressive in hard mode
       const deckRatio = deck.length / (deck.length + discardPile.length);
       if (deckRatio < 0.25 && baseValue > 30) {
-        score += 50;
+        score += difficulty === "hard" ? 80 : 50;
       }
 
-      // Learning from wins/losses
+      // Learning from wins/losses - ENHANCED in hard mode
       const winRate =
         aiMemory.current.wins / Math.max(1, aiMemory.current.totalGames);
       if (winRate < 0.35) {
         if (["draw2", "skip", "reverse", "wild4"].includes(card.value)) {
-          score += 70 * aiMemory.current.adaptationRate;
+          score +=
+            difficulty === "hard"
+              ? 100 * aiMemory.current.adaptationRate
+              : 70 * aiMemory.current.adaptationRate;
         }
-      } else if (winRate > 0.7) {
-        if (card.value === "wild" || card.value === "wild4") {
-          score -= 25;
+      } else if (winRate > 0.7 && difficulty === "hard") {
+        // When winning a lot, become even MORE aggressive
+        if (["draw2", "wild4"].includes(card.value)) {
+          score += 60;
         }
       }
 
-      // Color preference learning
+      // Color preference learning - ENHANCED
       if (COLORS.includes(card.color)) {
         const playerColorPref =
           aiMemory.current.colorPreferences[card.color] || 0;
         if (playerColorPref < 2) {
-          score += 35;
+          score += difficulty === "hard" ? 55 : 35;
+        }
+      }
+
+      // HARD MODE: Predict player's next move
+      if (difficulty === "hard" && aiMemory.current.turnsPlayed > 8) {
+        // If player keeps playing same color, assume they have more
+        const recentPlayerColors = aiMemory.current.recentMoves
+          .slice(-5)
+          .map((m) => m.card.color)
+          .filter((c) => COLORS.includes(c));
+
+        if (recentPlayerColors.length >= 3) {
+          const mostFrequent = recentPlayerColors.reduce((acc, color) => {
+            acc[color] = (acc[color] || 0) + 1;
+            return acc;
+          }, {});
+
+          const dominantColor = Object.entries(mostFrequent).sort(
+            (a, b) => b[1] - a[1]
+          )[0];
+
+          if (dominantColor && dominantColor[1] >= 2) {
+            // Avoid playing this color to starve the player
+            if (card.color === dominantColor[0]) {
+              score -= 90;
+            }
+          }
         }
       }
 
@@ -1260,9 +1382,10 @@ export default function ImprovedUnoGame() {
         score += Math.random() * 50 - 25;
       }
 
-      // Confidence multiplier for hard
+      // Minimal randomness for hard mode (mostly optimal play)
       if (difficulty === "hard") {
-        score *= 1 + aiMemory.current.confidenceLevel * 0.4;
+        score += Math.random() * 5 - 2.5; // Even less randomness
+        score *= 1 + aiMemory.current.confidenceLevel * 0.5; // Higher confidence multiplier
       }
 
       return score;
@@ -1275,17 +1398,12 @@ export default function ImprovedUnoGame() {
       }))
       .sort((a, b) => b.score - a.score);
 
-    if (difficulty === "hard" && scoredCards.length >= 3) {
-      const top3 = scoredCards.slice(0, 3);
-      const weights = [0.75, 0.18, 0.07];
-      const random = Math.random();
-      let cumulative = 0;
-
-      for (let i = 0; i < top3.length; i++) {
-        cumulative += weights[i];
-        if (random < cumulative) {
-          return top3[i].card;
-        }
+    // Hard mode: Pick best card 85% of time, second best 15% of time
+    if (difficulty === "hard") {
+      if (Math.random() < 0.85 || scoredCards.length === 1) {
+        return scoredCards[0].card;
+      } else if (scoredCards.length >= 2) {
+        return scoredCards[1].card;
       }
     }
 
@@ -1321,17 +1439,20 @@ export default function ImprovedUnoGame() {
     const scoredColors = COLORS.map((color) => {
       let score = colorCounts[color] * 12;
 
-      // Target weak colors
+      // Target weak colors MORE aggressively in hard mode
       if (
         aiMemory.current.playerColors[color] <=
         aiMemory.current.playerColors[playerStrongColor] * 0.35
       ) {
-        score += 65 * aiMemory.current.confidenceLevel;
+        score +=
+          difficulty === "hard"
+            ? 100 * aiMemory.current.confidenceLevel
+            : 65 * aiMemory.current.confidenceLevel;
       }
 
       // Avoid recent colors
       if (recentColorCounts[color] >= 2) {
-        score -= 40;
+        score -= difficulty === "hard" ? 60 : 40;
       }
 
       // Avoid player favorite wild colors
@@ -1339,23 +1460,23 @@ export default function ImprovedUnoGame() {
         color !== playerFavoriteWildColor &&
         aiMemory.current.colorAfterWild[playerFavoriteWildColor] > 4
       ) {
-        score += 35;
+        score += difficulty === "hard" ? 55 : 35;
       }
 
       // Multiple cards bonus
       const hasMultipleOfColor = colorCounts[color] >= 2;
       if (hasMultipleOfColor) {
-        score += 55;
+        score += difficulty === "hard" ? 75 : 55;
       }
 
-      // Endgame bonus
+      // Endgame bonus - ENHANCED in hard mode
       if (aiHand.length <= 3 && colorCounts[color] >= 2) {
-        score += 80;
+        score += difficulty === "hard" ? 120 : 80;
       }
 
       // Punish desperate players
       if (playerHand.length > aiHand.length + 4 && colorCounts[color] >= 3) {
-        score += 50;
+        score += difficulty === "hard" ? 80 : 50;
       }
 
       // Performance-based adjustments
@@ -1363,29 +1484,62 @@ export default function ImprovedUnoGame() {
         aiMemory.current.wins / Math.max(1, aiMemory.current.totalGames);
       if (winRate > 0.65) {
         if (colorCounts[color] >= 2) {
-          score += 30;
+          score += difficulty === "hard" ? 50 : 30;
         }
       } else if (winRate < 0.35) {
         if (aiMemory.current.playerColors[color] < 3) {
-          score += 45 * aiMemory.current.adaptationRate;
+          score +=
+            difficulty === "hard"
+              ? 65 * aiMemory.current.adaptationRate
+              : 45 * aiMemory.current.adaptationRate;
         }
       }
 
-      // Color preference avoidance
+      // Color preference avoidance - ENHANCED
       const playerColorPref = aiMemory.current.colorPreferences[color] || 0;
       if (playerColorPref > 3) {
-        score -= 30;
+        score -= difficulty === "hard" ? 50 : 30;
       }
 
-      score *= 1 + aiMemory.current.confidenceLevel * 0.25;
+      // HARD MODE: Predictive color selection
+      if (difficulty === "hard" && aiMemory.current.turnsPlayed > 8) {
+        // Look at player's last 3 colors played
+        const lastThreeColors = aiMemory.current.recentMoves
+          .slice(-3)
+          .map((m) => m.card.color)
+          .filter((c) => COLORS.includes(c));
+
+        // If player avoided a color recently, they probably don't have it
+        const availableColors = COLORS.filter(
+          (c) => !lastThreeColors.includes(c)
+        );
+
+        if (availableColors.includes(color)) {
+          score += 70; // They probably can't play this!
+        }
+      }
+
+      score *=
+        1 +
+        aiMemory.current.confidenceLevel *
+          (difficulty === "hard" ? 0.35 : 0.25);
 
       return { color, score };
     }).sort((a, b) => b.score - a.score);
 
-    // Occasional unpredictability
+    // Hard mode: Pick absolute best 90% of time
+    if (difficulty === "hard") {
+      if (Math.random() < 0.9 || scoredColors.length === 1) {
+        return scoredColors[0].color;
+      } else if (scoredColors.length >= 2) {
+        return scoredColors[1].color;
+      }
+    }
+
+    // Occasional unpredictability for medium
     if (
-      difficulty === "hard" &&
-      Math.random() < 0.12 &&
+      difficulty === "medium" &&
+      Math.random() < 0.2 &&
       scoredColors.length >= 2
     ) {
       return scoredColors[1].color;
