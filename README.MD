@@ -37,6 +37,7 @@ Heads-up results from `npm run tournament -- --rounds 200 --budget 150`. Each pa
 | Shark vs Rookie | 71.8% ± 4.4 |
 | Grandmaster vs Shark | 62.7% ± 4.7 |
 | Grandmaster vs Casual | 74.8% ± 4.3 |
+| Grandmaster vs Rookie | 86.5% ± 3.3 |
 
 The ladder holds at a crowded table too. In a 3-player free-for-all (`--players 3 --rounds 400`: Rookie, Casual and Shark at one table, seats rotating, 1,200 rounds), the win shares are Rookie 20.4% ± 2.3, Casual 33.3% ± 2.7 and Shark 46.3% ± 2.8, against a fair share of 33%.
 
