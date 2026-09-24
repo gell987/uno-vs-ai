@@ -36,6 +36,9 @@ Heads-up results from `npm run tournament -- --rounds 200 --budget 150`. Each pa
 | Shark vs Casual | 61.5% ± 4.8 |
 | Shark vs Rookie | 71.8% ± 4.4 |
 | Grandmaster vs Shark | 62.7% ± 4.7 |
+| Grandmaster vs Casual | 74.8% ± 4.3 |
+
+The ladder holds at a crowded table too. In a 3-player free-for-all (`--players 3 --rounds 400`: Rookie, Casual and Shark at one table, seats rotating, 1,200 rounds), the win shares are Rookie 20.4% ± 2.3, Casual 33.3% ± 2.7 and Shark 46.3% ± 2.8, against a fair share of 33%.
 
 UNO is a game with a lot of luck, so even a much stronger player loses plenty of rounds. These margins are large for a card game. The tournament gives the Grandmaster 150 ms per move; in the game it thinks for about 650 ms (380–900 ms depending on the speed setting), which makes it stronger still.
 
@@ -71,7 +74,7 @@ Match the top card by color or by number/symbol, or play a wild. If you can't (o
 
 ## Getting started
 
-Requires Node.js 20.9 or newer.
+Requires Node.js 22.12 or newer.
 
 ```bash
 git clone https://github.com/gell987/uno-vs-ai.git
@@ -117,7 +120,8 @@ scripts/             AI tournament
 
 - **Engine**: every rule is covered with exactly constructed positions, plus a fuzzer that plays 600 random rounds across all rule combinations and player counts. It checks after every action that all 108 cards are conserved, every enumerated move is legal, and player views never leak hidden cards.
 - **AI**: belief tracking is checked against the true hands in live games (it may be uncertain, but it must never be wrong about a card it claims to know). Also covered: that sampling honors constraints, that every difficulty only returns legal moves, and targeted strategy positions (take the win, save the wild for last, target a void color, challenge a sure bluff). A quick strength check confirms the Shark beats the Rookie.
-- **Controller**: AI pacing, the UNO catch race, assist mode, and protection against stale AI moves are tested under fake timers.
+- **Controller**: AI pacing, the UNO catch race, assist mode, pausing, hints and protection against stale AI moves are tested under fake timers.
+- **Game layer**: saved settings, stats and profiles are validated field by field, and stats bookkeeping, log wording, prompts and table talk are covered.
 - **End to end**: Playwright plays real games in Chromium at desktop and phone sizes and checks for console errors. It also checks rules dialogs, settings persistence and horizontal overflow.
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, typecheck, unit tests, the production build and the browser tests on every push and pull request.

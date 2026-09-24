@@ -35,6 +35,6 @@
   },
   "description": "UNO against genuinely smart AI opponents: card-counting, hand inference and Monte Carlo search, in the browser.",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=22.12.0"
   }
 }
