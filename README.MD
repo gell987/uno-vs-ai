@@ -1,156 +1,132 @@
-# UNO ELITE: A Demonstrative Exploration in Adaptive Game AI
+# UNO vs AI
 
-## Intellectual Showcase
+Play UNO in your browser against AI opponents that count cards, work out what you're holding from what you draw, and simulate thousands of possible futures before every move. And you can watch them think while they do it.
 
-This repository contains a sophisticated implementation of UNO featuring an artificially intelligent opponent that demonstrates advanced computational decision-making strategies. The project serves as a technical exhibition of contemporary web development paradigms, real-time audio synthesis, and machine learning concepts applied within an interactive gaming context.
+![The game table: a Grandmaster opponent, the discard pile, your hand, and the AI insights panel](docs/screenshot-desktop.jpg)
 
-## Conceptual Architecture
+## Highlights
 
-### Cognitive AI System
+- **Four distinct AI opponents**, from a forgetful Rookie to a Grandmaster that runs Monte Carlo search in a Web Worker. Tournament results below show each level beats the one before it.
+- **Honest AI.** Opponents only ever see what a person at the table could: their own cards and the public history of the round. They never see your hand or the order of the deck.
+- **Watch the AI think.** A live panel shows how the Grandmaster rated each move (with win chances), what the strongest AI believes you're holding, and what the AIs have learned about your habits. Stuck? Ask the Grandmaster for a hint.
+- **Official rules, done properly**: Wild Draw Four challenges, draw-then-play, catching missed UNO calls (a real-time race), starting-card effects, reshuffles and scoring to a target. Optional house rules: stacking, draw until playable, and Seven-O.
+- **2–4 players**, as a single round or a match to 100, 250 or 500 points.
+- **A table that feels good**: hand-drawn SVG cards, animated deals and plays, procedural sound effects with a spoken "UNO!", AI table talk, five felt colors and confetti when you win.
+- **Accessible.** Full keyboard control, screen-reader announcements, color-blind card symbols and reduced-motion support. It plays well on phones, in portrait and landscape.
+- **Remembers you.** Settings, lifetime stats, what the AIs learned about you, and your in-progress match all survive a reload (stored locally, nothing leaves your browser).
 
-The artificial intelligence implements a multi-layered decision-making framework that evolves through gameplay. Rather than employing static rule-based logic, the opponent utilizes:
+<p align="center"><img src="docs/screenshot-phone.jpg" alt="The game on a phone with two opponents" width="300"></p>
 
-* **Predictive Player Modeling**: Continuous analysis of player tendencies through probabilistic weighting
-* **Dynamic Strategy Adjustment**: Real-time modification of risk assessment parameters based on game state
-* **Pattern Recognition Algorithms**: Identification of recurring player behavioral sequences
-* **Adaptive Learning Mechanisms**: Progressive difficulty scaling through experience accumulation
+## The opponents
 
-### Technical Implementation Details
+| Level | How it plays |
+| --- | --- |
+| **Rookie** | Mostly plays a random legal card. Often forgets to call UNO, and rarely notices when you do. |
+| **Casual** | Sticks to its strongest color and saves its wilds, but fires action cards as soon as it can. |
+| **Shark** | Tracks every card and works out which colors you lack from your draws, then steers play onto them. It saves wilds and action cards for when they matter, spots chains of skips that let it go out in one turn, and challenges or bluffs Wild Draw Fours when the odds favor it. |
+| **Grandmaster** | Everything the Shark knows, plus search. For each candidate move it deals out thousands of hands you could plausibly hold, plays every game to the end, and picks the move that wins most often (typically several thousand simulated games per move). |
 
-#### Real-Time Audio Synthesis
+### How they compare
 
-The application generates auditory feedback entirely through algorithmic synthesis rather than pre-recorded assets:
+Heads-up results from `npm run tournament -- --rounds 200 --budget 150`. Each pairing replays the same shuffled decks with the seats swapped, so neither side gains from the deal or from moving first. "±" is a 95% confidence interval.
 
-```
-const createVoice = (text, baseFreq, duration) => {
-  const formants = {
-    U: [300, 870, 2240], // "oo" sound in UNO
-    O: [500, 700, 2600], // "oh" sound
-    N: [280, 2200, 2600], // nasal sound
-  };
-```
+| Matchup | Win rate of the first player |
+| --- | --- |
+| Casual vs Rookie | 61.0% ± 4.8 |
+| Shark vs Casual | 61.5% ± 4.8 |
+| Shark vs Rookie | 71.8% ± 4.4 |
+| Grandmaster vs Shark | 62.7% ± 4.7 |
+| Grandmaster vs Casual | 74.8% ± 4.3 |
+| Grandmaster vs Rookie | 86.5% ± 3.3 |
 
-The Web Audio API constructs complex waveforms through additive synthesis, creating distinctive auditory signatures for each game event through mathematical manipulation of frequency, amplitude, and temporal characteristics.
+The ladder holds at a crowded table too. In a 3-player free-for-all (`--players 3 --rounds 400`: Rookie, Casual and Shark at one table, seats rotating, 1,200 rounds), the win shares are Rookie 20.4% ± 2.3, Casual 33.3% ± 2.7 and Shark 46.3% ± 2.8, against a fair share of 33%.
 
-#### React Performance Optimization
+UNO is a game with a lot of luck, so even a much stronger player loses plenty of rounds. These margins are large for a card game. The tournament gives the Grandmaster 150 ms per move; in the game it thinks for about 650 ms (380–900 ms depending on the speed setting), which makes it stronger still.
 
-The implementation employs strategic state management patterns to maintain responsiveness:
+## How the AI works
 
-* **Memoized Sound Generation**: Audio context persistence across component lifecycles
-* **Selective Re-rendering**: Component isolation through proper dependency management
-* **Animation Frame Synchronization**: Visual effects coordinated with game state transitions
-* **Event Delegation**: Efficient user interaction handling through centralized controllers
+All AI code lives in [`lib/ai`](lib/ai) and is independent of React. The game engine in [`lib/uno`](lib/uno) is a pure, deterministic state machine that the AI and the UI share.
 
-## Strategic Difficulty Modulation
+1. **Information hiding.** An AI receives a `PlayerView`: its own hand, public counts, the discard pile and the round log with other players' private details removed. It never gets the draw pile order, other hands, or whether a Wild Draw Four was a bluff.
+2. **Reading your hand** ([`beliefs.ts`](lib/ai/beliefs.ts)). The AI replays the log and tracks each opponent's hand as groups of unknown cards with constraints. If you draw while red 7 is showing, the cards you already held contain no red, no 7 and no wild; the card you drew starts a new group with no constraints. Challenge reveals and 7-swaps give exact knowledge, which is tracked as cards move between hands.
+3. **Sampling possible worlds** ([`sampler.ts`](lib/ai/sampler.ts)). The AI deals the unknown cards into full hands consistent with those constraints, with soft trust for human players (who sometimes draw on purpose), color hints from wild choices, and conditioning on guilt when deciding a challenge.
+4. **The Shark** ([`heuristic.ts`](lib/ai/heuristic.ts)) scores each move with rules of thumb: shedding cards, keeping follow-up options, holding wilds and action cards until the game gets tight, leaving a color the next player probably can't follow, winning via skip chains, and shedding points when someone is about to go out. Its weights came from studying positions where it disagreed with the Grandmaster, then checking each change in tournaments.
+5. **The Grandmaster** ([`search.ts`](lib/ai/search.ts), [`rollout.ts`](lib/ai/rollout.ts)) runs determinized Monte Carlo search: sample a world, play every candidate move to the end with a fast playout policy using the same sampled world and random numbers for each (common random numbers), and repeat until the time budget runs out, dropping moves that are clearly worse. Playouts are allocation-light, at roughly 20 µs per game in Node.
+6. **Learning your habits** ([`profile.ts`](lib/ai/profile.ts)). The AIs remember how often you challenge a +4, how often you were bluffing when challenged, whether you play the color you pick with a wild, and how often you forget UNO. These feed into challenge decisions, bluff risk and hand reading. Everything is based on what a person at the table could observe.
 
-The artificial opponent operates across three distinct cognitive frameworks:
+AI thinking runs in a Web Worker ([`worker.ts`](lib/ai/worker.ts)) so the table stays smooth, with an automatic fallback to the main thread.
 
-### Fundamental Mode
-Implements basic rule adherence with stochastic decision-making, presenting minimal strategic complexity for introductory engagement.
+## Rules in brief
 
-### Intermediate Mode
-Introduces elementary pattern recognition and situational analysis, developing basic predictive capabilities about player card distribution.
+Match the top card by color or by number/symbol, or play a wild. If you can't (or won't), draw; a playable drawn card may be played at once. Skip, Reverse, Draw Two, Wild and Wild Draw Four work as in the official rules, including the Wild Draw Four challenge. Press **UNO!** when you play your second-to-last card, before an opponent catches you. Going out scores the cards left in everyone else's hands (numbers at face value, action cards 20, wilds 50). The full rules are in the game under **How to play**.
 
-### Advanced Mode
-Deploys comprehensive strategic analysis including:
-* Player tendency profiling across multiple game sessions
-* Counter-strategy development against identified patterns
-* Psychological manipulation through intentional suboptimal plays
-* Long-term game state probability calculation
+## Controls
 
-## Computational Decision-Making Framework
+| Key | Action |
+| --- | --- |
+| <kbd>←</kbd> <kbd>→</kbd>, <kbd>Enter</kbd> | Browse and play cards |
+| <kbd>D</kbd> | Draw (or take a stacked penalty, or pass) |
+| <kbd>P</kbd> / <kbd>K</kbd> | Play or keep a card you just drew |
+| <kbd>U</kbd> | Call UNO |
+| <kbd>C</kbd> | Catch an opponent who forgot UNO |
+| <kbd>H</kbd> | Ask the Grandmaster for a hint |
+| <kbd>1</kbd>–<kbd>4</kbd> | Pick a color |
+| <kbd>Esc</kbd> | Pause menu |
 
-The AI evaluates potential actions through a weighted scoring system:
+## Getting started
 
-```javascript
-const scoreCard = (card) => {
-  let score = baseValue * strategicWeighting;
-  
-  // Endgame optimization
-  if (aiHand.length <= 2) {
-    score += cardValue * endgameMultiplier;
-  }
-  
-  // Player tendency exploitation
-  if (playerWeakColors.includes(card.color)) {
-    score += exploitationBonus;
-  }
-  
-  return score * confidenceFactor;
-};
-```
-
-This evaluation considers multiple contextual factors including hand composition, opponent behavior history, game phase, and probabilistic outcome projections.
-
-## Technical Architecture
-
-### Component Structure
-```
-ImprovedUnoGame/
-├── Audio Synthesis Engine (Web Audio API)
-├── AI Decision Core (Reactive State Machine)
-├── Visual Rendering System (Tailwind CSS)
-├── Game State Manager (React Hooks)
-└── User Interaction Layer (Event Handlers)
-```
-
-### State Management
-The application implements a unidirectional data flow architecture with specialized hooks for discrete concerns:
-
-* `useSoundEffects`: Procedural audio generation and management
-* `aiMemory`: Persistent learning across game sessions
-* Game state synchronization through React's reconciliation algorithm
-
-## Performance Characteristics
-
-* Initial load: < 2 seconds on modern hardware
-* Decision latency: < 100ms for AI calculations
-* Frame consistency: 60fps maintained during animations
-* Memory footprint: < 50MB during active gameplay
-
-## Development Philosophy
-
-This project embodies several software engineering principles:
-
-1. **Algorithmic Elegance**: Complex behavior through simple computational primitives
-2. **Performance Consciousness**: Resource utilization optimization without premature optimization
-3. **User Experience Prioritization**: Responsive interaction design with meaningful feedback
-4. **Code Maintainability**: Clear separation of concerns with documented interfaces
-
-## Implementation Insights
-
-The project demonstrates several non-trivial technical accomplishments:
-
-* Real-time procedural audio generation without external dependencies
-* Adaptive AI that learns from individual opponent behavior
-* Efficient card game simulation with optimal state updates
-* Visually engaging interface through CSS transforms and transitions
-* Cross-session memory persistence through React ref patterns
-
-## Examination Points
-
-Reviewers may find particular interest in:
-
-1. The mathematical models governing AI decision-making in `selectSmartCard()`
-2. The audio synthesis algorithms constructing human-like vocalizations
-3. The state management patterns preventing unnecessary re-renders
-4. The difficulty scaling mechanisms across cognitive frameworks
-
-## Execution Instructions
+Requires Node.js 22.12 or newer.
 
 ```bash
-git clone https://github.com/username/uno-elite.git
-cd uno-elite
+git clone https://github.com/gell987/uno-vs-ai.git
+cd uno-vs-ai
 npm install
 npm run dev
 ```
 
-Navigate to `http://localhost:3000` to experience the implementation.
+Then open http://localhost:3000.
 
-## Conclusion
+| Script | What it does |
+| --- | --- |
+| `npm run dev` | Development server |
+| `npm run build` / `npm start` | Production build and server |
+| `npm run lint` | ESLint (Next.js, TypeScript and React Hooks rules) |
+| `npm run typecheck` | Strict TypeScript check |
+| `npm test` | Unit, property and integration tests (Vitest) |
+| `npm run e2e` | Browser tests on desktop and phone viewports (Playwright; run `npm run build` first) |
+| `npm run tournament` | AI vs AI tournament (`--rounds`, `--budget`, `--players 3`, `--house`) |
+| `npm run check` | Lint, typecheck, test and build in one go |
 
-This project represents a comprehensive technical demonstration of modern web development capabilities applied to interactive gaming. It showcases not merely functional implementation but thoughtful architectural decisions, performance considerations, and user experience design through computational intelligence.
+## Project structure
 
----
+```
+app/                 Next.js entry: layout, page, icon, web manifest, global styles
+components/
+  cards/             SVG card faces and backs
+  game/              Table, hand, opponent seats, piles, dialogs, AI insights panel
+  lobby/             Game setup screen
+  panels/            Settings, how to play, stats
+  ui/                Buttons, toggles, modal dialog, avatars
+lib/
+  uno/               Rules engine: cards, seeded RNG, state machine, matches, player views
+  ai/                Beliefs, sampling, heuristic players, Monte Carlo search, learning, worker
+  game/              Controller (AI pacing, UNO races, hints), persistence, stats, text
+  audio/             Procedural Web Audio sound effects
+tests/               Vitest suites for the engine, AI and controller
+e2e/                 Playwright smoke tests
+scripts/             AI tournament
+```
 
-*This implementation serves as both an engaging interactive experience and a technical reference for developers interested in game AI, real-time web applications, and advanced React patterns.*
+## Testing
+
+- **Engine**: every rule is covered with exactly constructed positions, plus a fuzzer that plays 600 random rounds across all rule combinations and player counts. It checks after every action that all 108 cards are conserved, every enumerated move is legal, and player views never leak hidden cards.
+- **AI**: belief tracking is checked against the true hands in live games (it may be uncertain, but it must never be wrong about a card it claims to know). Also covered: that sampling honors constraints, that every difficulty only returns legal moves, and targeted strategy positions (take the win, save the wild for last, target a void color, challenge a sure bluff). A quick strength check confirms the Shark beats the Rookie.
+- **Controller**: AI pacing, the UNO catch race, assist mode, pausing, hints and protection against stale AI moves are tested under fake timers.
+- **Game layer**: saved settings, stats and profiles are validated field by field, and stats bookkeeping, log wording, prompts and table talk are covered.
+- **End to end**: Playwright plays real games in Chromium at desktop and phone sizes and checks for console errors. It also checks rules dialogs, settings persistence and horizontal overflow.
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs lint, typecheck, unit tests, the production build and the browser tests on every push and pull request.
+
+## Disclaimer
+
+This is an unofficial fan project. UNO is a trademark of Mattel; this project is not affiliated with or endorsed by Mattel.
